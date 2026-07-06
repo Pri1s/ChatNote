@@ -1,0 +1,56 @@
+{
+  "uuid": "fixture-api",
+  "snapshot_name": "API Snapshot Fixture",
+  "is_public": true,
+  "created_by": "Fixture User",
+  "chat_messages": [
+    {
+      "uuid": "m1",
+      "index": 0,
+      "sender": "human",
+      "created_at": "2026-07-06T12:00:00Z",
+      "content": [
+        {
+          "type": "text",
+          "text": "Can you parse the public snapshot API payload?"
+        }
+      ],
+      "attachments": [
+        {
+          "file_name": "brief.pdf"
+        }
+      ],
+      "files": []
+    },
+    {
+      "uuid": "m2",
+      "index": 1,
+      "sender": "assistant",
+      "created_at": "2026-07-06T12:01:00Z",
+      "content": [
+        {
+          "type": "text",
+          "text": "Yes. Here is a tiny check:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "text": "print('chatnote ok')"
+        },
+        {
+          "type": "tool_use",
+          "name": "Search",
+          "input": {
+            "query": "snapshot parser"
+          }
+        }
+      ],
+      "attachments": [],
+      "files": [
+        {
+          "file_name": "result.csv"
+        }
+      ]
+    }
+  ]
+}

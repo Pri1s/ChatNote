@@ -49,3 +49,40 @@ measured citation-fidelity score against a hand-labeled answer key.
 - Contradiction and evolution detection
 - Incremental notebook re-synthesis
 - Human-edit handling
+
+## Local CLI
+
+Sprint 1 capture starts with a single public Claude shared snapshot link. The
+CLI intentionally rejects private Claude chat URLs, non-Claude URLs, and any
+capture path that would require private endpoints or automated logged-in DOM
+scraping.
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e .
+chatnote capture https://claude.ai/share/<id>
+```
+
+By default, capture writes private local artifacts under ignored paths:
+
+- `data/raw/`: immutable raw shared-snapshot source, usually Claude's public
+  snapshot JSON and occasionally rendered/shared HTML fixtures
+- `data/transcripts/`: parsed transcript JSON
+
+The transcript schema includes source metadata, conversation metadata, ordered
+messages, structured blocks, nullable timestamps, provenance, and warnings for
+snapshot limitations such as missing timestamps, attachment placeholders, or
+unsupported tool-call data.
+
+For current Claude share pages, the CLI first tries the public
+`/api/chat_snapshots/<id>` payload because the HTML page can be only the Claude
+web app shell. If Claude returns a challenge instead of transcript data, the CLI
+reports that as a fetch error instead of saving an empty transcript.
+
+For local development without installing the package:
+
+```bash
+PYTHONPATH=src python3 -m chatnote capture https://claude.ai/share/<id>
+PYTHONPATH=src python3 -m unittest discover -s tests -p 'test*.py'
+```
