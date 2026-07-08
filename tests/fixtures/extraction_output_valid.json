@@ -1,0 +1,33 @@
+{
+  "claims": [
+    {
+      "standalone_claim_text": "The user would probably prefer SQLite over Postgres for local storage.",
+      "speaker_role": "user",
+      "speech_act_type": "preference",
+      "hedge_level": "medium",
+      "source_message_index": 0,
+      "source_quote": "I'd probably lean SQLite over Postgres",
+      "concept_tags": ["storage", "sqlite"]
+    },
+    {
+      "standalone_claim_text": "The claim ledger stays append-only.",
+      "speaker_role": "assistant",
+      "speech_act_type": "fact",
+      "hedge_level": "none",
+      "source_message_index": 1,
+      "source_block_index": 0,
+      "source_char_start": 34,
+      "source_char_end": 69,
+      "source_quote": "The claim ledger stays append-only.",
+      "concept_tags": ["ledger"]
+    },
+    {
+      "standalone_claim_text": "The user asked what happens if the same share link is captured twice.",
+      "speaker_role": "user",
+      "speech_act_type": "question",
+      "hedge_level": "none",
+      "source_message_index": 2,
+      "source_quote": "What happens if the same share link is captured twice?"
+    }
+  ]
+}
