@@ -10,4 +10,5 @@ dist/
 # Local/private capture outputs.
 data/raw/
 data/transcripts/
+data/*.db
 .chatnote/

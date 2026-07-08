@@ -1,0 +1,75 @@
+{
+  "source": {
+    "url": "https://claude.ai/share/ledger-fixture-conv",
+    "capture_method": "claude_shared_snapshot",
+    "parser_method": "json_structured_data",
+    "fetched_at": "2026-07-07T10:00:00Z",
+    "raw_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "conversation": {
+    "id": "ledger-fixture-conv",
+    "title": "Ledger fixture conversation"
+  },
+  "messages": [
+    {
+      "index": 0,
+      "role": "user",
+      "text": "I'd probably lean SQLite over Postgres for local storage. Keep everything on my machine.",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "I'd probably lean SQLite over Postgres for local storage. Keep everything on my machine."
+        }
+      ],
+      "timestamp": "2026-07-07T09:59:40Z",
+      "provenance": {
+        "source": "json_structured_data",
+        "raw_index": 0
+      }
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "text": "SQLite fits a local-first design. The claim ledger stays append-only.\n\ndef init_store():\n    return sqlite3.connect(\"chatnote.db\")",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "SQLite fits a local-first design. The claim ledger stays append-only."
+        },
+        {
+          "type": "code",
+          "text": "def init_store():\n    return sqlite3.connect(\"chatnote.db\")",
+          "language": "python"
+        }
+      ],
+      "timestamp": "2026-07-07T09:59:52Z",
+      "provenance": {
+        "source": "json_structured_data",
+        "raw_index": 1
+      }
+    },
+    {
+      "index": 2,
+      "role": "user",
+      "text": "What happens if the same share link is captured twice?",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "What happens if the same share link is captured twice?"
+        }
+      ],
+      "timestamp": null,
+      "provenance": {
+        "source": "json_structured_data",
+        "raw_index": 2
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "code": "missing_timestamp",
+      "message": "Message 2 has no timestamp in the shared snapshot.",
+      "message_index": 2
+    }
+  ]
+}

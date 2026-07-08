@@ -1,0 +1,9 @@
+{
+  "name": "Ledger fixture snapshot",
+  "uuid": "ledger-fixture-conv",
+  "chat_messages": [
+    {"sender": "human", "text": "I'd probably lean SQLite over Postgres for local storage. Keep everything on my machine."},
+    {"sender": "assistant", "text": "SQLite fits a local-first design. The claim ledger stays append-only."},
+    {"sender": "human", "text": "What happens if the same share link is captured twice?"}
+  ]
+}
