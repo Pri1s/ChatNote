@@ -142,3 +142,15 @@ Rejected claim and the errors reported for it:
 
 Runnable synthetic examples live in `tests/fixtures/extraction_output_valid.json`
 and `tests/test_extraction_contract.py`.
+
+## Live Extractor Note (Sprint 2)
+
+The model-backed extractor (`src/chatnote/llm_extractor.py`) is
+provider-agnostic: it speaks the OpenAI-compatible `chat/completions` shape via
+OpenRouter, or any endpoint set through `CHATNOTE_LLM_BASE_URL`. It does not
+use provider-side schema enforcement such as `response_format` — support varies
+per OpenRouter model — so this contract's validator remains the sole
+enforcement layer: the prompt mandates JSON-only output, markdown code fences
+are stripped defensively, and any output that violates the contract records a
+failed extraction run and writes no claims. Explicit `null` values for the
+optional claim fields are treated as absent, since models routinely emit them.

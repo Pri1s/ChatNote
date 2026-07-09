@@ -280,7 +280,11 @@ def _validate_claim(
                 f"{label}: character offsets do not reproduce source_quote."
             )
 
-    concept_tags = raw_claim.get("concept_tags", [])
+    # Models routinely emit explicit nulls for optional fields; treat them as
+    # absent, matching the .get(...) is-None handling of the other optionals.
+    concept_tags = raw_claim.get("concept_tags")
+    if concept_tags is None:
+        concept_tags = []
     if not isinstance(concept_tags, list) or any(
         not isinstance(tag, str) or not tag.strip() for tag in concept_tags
     ):
@@ -306,5 +310,5 @@ def _build_claim(raw_claim: dict[str, Any]) -> ExtractedClaim:
         source_char_start=raw_claim.get("source_char_start"),
         source_char_end=raw_claim.get("source_char_end"),
         speaker_label=raw_claim.get("speaker_label"),
-        concept_tags=tuple(raw_claim.get("concept_tags", [])),
+        concept_tags=tuple(raw_claim.get("concept_tags") or ()),
     )

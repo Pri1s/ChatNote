@@ -7,8 +7,18 @@ from pathlib import Path
 
 from . import queries
 from .capture import FetchError, capture_share_link
+from .llm_extractor import (
+    LLMExtractorError,
+    build_openrouter_extractor,
+    load_openrouter_config,
+)
 from .parser import ParseError
-from .pipeline import ExtractionPipelineError, make_file_extractor, run_extraction_pipeline
+from .pipeline import (
+    ExtractionPipelineError,
+    Extractor,
+    make_file_extractor,
+    run_extraction_pipeline,
+)
 from .store import (
     DEFAULT_DB_PATH,
     LedgerStore,
@@ -64,16 +74,44 @@ def build_parser() -> argparse.ArgumentParser:
     extract.add_argument(
         "--claims-json",
         type=Path,
-        required=True,
-        help="File containing extraction output JSON (the Sprint 1 file-backed extractor).",
+        help="File containing pre-generated extraction output JSON (the offline "
+        "file-backed extractor). When omitted, claims are extracted with the "
+        "OpenRouter model from --model or CHATNOTE_MODEL.",
     )
     extract.add_argument(
         "--extractor-name",
-        default="file-extractor",
-        help="Extractor name recorded on the extraction run.",
+        help="Extractor name recorded on the extraction run. Defaults to "
+        "file-extractor with --claims-json, openrouter otherwise.",
     )
-    extract.add_argument("--model", help="Optional model name recorded on the extraction run.")
+    extract.add_argument(
+        "--model",
+        help="Model for the OpenRouter extractor (falls back to CHATNOTE_MODEL); "
+        "with --claims-json it is only recorded on the extraction run.",
+    )
     _add_db_path_argument(extract)
+
+    run = subparsers.add_parser(
+        "run",
+        help="Capture a share link, ingest it, and extract claims in one step.",
+    )
+    run.add_argument("url", help="Claude shared snapshot URL, e.g. https://claude.ai/share/<id>")
+    run.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("data"),
+        help="Directory for local capture outputs. Defaults to ./data.",
+    )
+    run_extractor = run.add_mutually_exclusive_group()
+    run_extractor.add_argument(
+        "--model",
+        help="Model for the OpenRouter extractor (falls back to CHATNOTE_MODEL).",
+    )
+    run_extractor.add_argument(
+        "--claims-json",
+        type=Path,
+        help="Use pre-generated extraction output JSON instead of a model call.",
+    )
+    _add_db_path_argument(run)
 
     query = subparsers.add_parser(
         "query", help="Inspect stored transcripts, claims, and extraction runs."
@@ -116,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
         return _store_command(args)
     if args.command == "extract":
         return _extract_command(args)
+    if args.command == "run":
+        return _run_command(args)
     if args.command == "query":
         return _query_command(args)
 
@@ -164,15 +204,44 @@ def _store_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def _extract_command(args: argparse.Namespace) -> int:
+def _resolve_extractor(
+    args: argparse.Namespace, *, transport=None
+) -> tuple[Extractor, str, str | None]:
+    """Pick the file-backed or OpenRouter extractor from CLI arguments.
+
+    Raises LLMExtractorError on missing model/key configuration, before any
+    extraction run row is written.
+    """
+    extractor_name = getattr(args, "extractor_name", None)
+    if args.claims_json is not None:
+        return (
+            make_file_extractor(args.claims_json),
+            extractor_name or "file-extractor",
+            args.model,
+        )
+    config = load_openrouter_config(model=args.model)
+    return (
+        build_openrouter_extractor(config, transport=transport),
+        extractor_name or "openrouter",
+        config.model,
+    )
+
+
+def _extract_command(args: argparse.Namespace, *, transport=None) -> int:
+    try:
+        extractor, extractor_name, model = _resolve_extractor(args, transport=transport)
+    except LLMExtractorError as exc:
+        print(f"chatnote: error: {exc}", file=sys.stderr)
+        return 1
+
     try:
         with LedgerStore.open(args.db_path) as store:
             outcome = run_extraction_pipeline(
                 store,
                 transcript_id=args.transcript_id,
-                extractor=make_file_extractor(args.claims_json),
-                extractor_name=args.extractor_name,
-                model=args.model,
+                extractor=extractor,
+                extractor_name=extractor_name,
+                model=model,
             )
     except ExtractionPipelineError as exc:
         print(f"chatnote: error: {exc}", file=sys.stderr)
@@ -181,13 +250,97 @@ def _extract_command(args: argparse.Namespace) -> int:
         print(f"chatnote: error: {exc}", file=sys.stderr)
         return 1
 
+    _print_extraction_outcome(outcome)
+    return 0
+
+
+def _run_command(
+    args: argparse.Namespace, *, fetcher=None, transport=None, extractor=None
+) -> int:
+    extractor_name = "openrouter"
+    model = args.model
+    if extractor is None:
+        try:
+            extractor, extractor_name, model = _resolve_extractor(
+                args, transport=transport
+            )
+        except LLMExtractorError as exc:
+            print(f"chatnote: error: {exc}", file=sys.stderr)
+            return 1
+
+    try:
+        capture = capture_share_link(
+            args.url, output_dir=args.output_dir, fetcher=fetcher or None
+        )
+    except (URLValidationError, FetchError, ParseError) as exc:
+        print(f"chatnote: error: capture failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Captured Claude conversation: {capture.conversation_id}")
+    if capture.title:
+        print(f"Title: {capture.title}")
+    print(f"Messages: {capture.message_count}")
+    print(f"Raw source: {capture.raw_path}")
+    print(f"Transcript JSON: {capture.transcript_path}")
+
+    try:
+        with LedgerStore.open(args.db_path) as store:
+            try:
+                ingest = store.ingest_capture(
+                    raw_path=capture.raw_path, transcript_path=capture.transcript_path
+                )
+            except StoreError as exc:
+                print(f"chatnote: error: ingest failed: {exc}", file=sys.stderr)
+                print(
+                    "Capture outputs were written and can be ingested separately "
+                    f"with: chatnote store ingest {capture.raw_path} "
+                    f"{capture.transcript_path}",
+                    file=sys.stderr,
+                )
+                return 1
+            print(f"Transcript ID: {ingest.transcript_id}")
+
+            try:
+                outcome = run_extraction_pipeline(
+                    store,
+                    transcript_id=ingest.transcript_id,
+                    extractor=extractor,
+                    extractor_name=extractor_name,
+                    model=model,
+                )
+            except (ExtractionPipelineError, queries.QueryError) as exc:
+                print(f"chatnote: error: extraction failed: {exc}", file=sys.stderr)
+                print(
+                    f"The transcript is stored as {ingest.transcript_id}; inspect "
+                    "failed runs with: chatnote query runs --transcript-id "
+                    f"{ingest.transcript_id} --db-path {args.db_path}",
+                    file=sys.stderr,
+                )
+                return 1
+    except StoreError as exc:
+        print(f"chatnote: error: {exc}", file=sys.stderr)
+        return 1
+
+    _print_extraction_outcome(outcome)
+    print("Next:")
+    print(
+        f"  chatnote query claims --conversation {capture.conversation_id} "
+        f"--db-path {args.db_path}"
+    )
+    print(
+        f"  chatnote query runs --transcript-id {ingest.transcript_id} "
+        f"--db-path {args.db_path}"
+    )
+    return 0
+
+
+def _print_extraction_outcome(outcome) -> None:
     print(f"Extraction run: {outcome.run_id}")
     print(f"Status: {outcome.status}")
     print(f"Claims written: {len(outcome.claim_ids)}")
     for verdict, count in outcome.support_verdicts:
         print(f"Citation support {verdict}: {count}")
     print(f"Quote fallbacks applied: {outcome.fallback_count}")
-    return 0
 
 
 def _query_command(args: argparse.Namespace) -> int:
