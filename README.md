@@ -78,6 +78,17 @@ transcript ID, claim counts, citation support verdicts, and ready-to-paste
 query commands. If a stage fails it reports what did complete (capture file
 paths, the stored transcript ID) so nothing has to be redone.
 
+For the zero-setup version, `main.py` at the repo root loads `.env` itself (no
+exports needed), runs the same flow, and prints the extracted claims at the
+end. Copy `.env.example` to `.env`, fill in your key and model, then:
+
+```bash
+python3 main.py https://claude.ai/share/<id>   # or run bare to be prompted
+```
+
+Extra flags are forwarded to `chatnote run`, so `--model`, `--claims-json`,
+`--db-path`, and `--output-dir` all work there too.
+
 The model is plug-and-play by design — swap `CHATNOTE_MODEL` (or pass
 `--model`) to experiment with different models. There is no default model: an
 unset model is a clear configuration error instead of a confusing API failure.
