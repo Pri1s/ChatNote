@@ -12,3 +12,6 @@ data/raw/
 data/transcripts/
 data/*.db
 .chatnote/
+
+# Local secrets.
+.env
