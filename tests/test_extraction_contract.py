@@ -159,6 +159,36 @@ class ValidationTests(unittest.TestCase):
             )
         self.assertIn("provided together", ctx.exception.errors[0])
 
+    def test_explicit_null_optional_fields_are_treated_as_absent(self) -> None:
+        claims = validate_extraction_output(
+            {
+                "claims": [
+                    valid_claim(
+                        source_block_index=None,
+                        source_char_start=None,
+                        source_char_end=None,
+                        speaker_label=None,
+                        concept_tags=None,
+                    )
+                ]
+            },
+            TRANSCRIPT,
+        )
+        self.assertEqual(len(claims), 1)
+        claim = claims[0]
+        self.assertIsNone(claim.source_block_index)
+        self.assertIsNone(claim.source_char_start)
+        self.assertIsNone(claim.source_char_end)
+        self.assertIsNone(claim.speaker_label)
+        self.assertEqual(claim.concept_tags, ())
+        row = claim.to_ledger_row(
+            transcript_id="tr-1",
+            conversation_id="ledger-fixture-conv",
+            claim_sequence=0,
+        )
+        self.assertIsNone(row["source_block_index"])
+        self.assertEqual(json.loads(row["concept_tags_json"]), [])
+
     def test_concept_tags_must_be_non_empty_strings(self) -> None:
         with self.assertRaises(ExtractionValidationError):
             validate_extraction_output(

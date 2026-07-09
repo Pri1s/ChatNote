@@ -39,10 +39,12 @@ Sprint 1 scope.
 | S1-010 | Implement: Per-Conversation Extraction Pipeline | Phase 4: Claim Extraction Pipeline | Backend | High |
 | S1-011 | Implement: Citation Support Check and Quote Fallback | Phase 4: Claim Extraction Pipeline | Backend | High |
 
-Rescoped to Sprint 2 in the tracker: messy conversation handling (S1-003),
-the 10-transcript round-trip validation (S2-001), the hand-labeled answer key
-(S1-008), evaluation dataset runs (S1-012), coverage/attribution/citation
-scoring (S1-013), and the failure-modes retro (S1-014).
+Sprint 2 closes the functional-MVP gaps: S2-001 (OpenRouter model-backed claim
+extractor) and S2-002 (one-shot `chatnote run` command). The previously
+deferred manual-evaluation work (messy conversation handling, 10-transcript
+round trips, hand-labeled answer key, evaluation dataset runs,
+coverage/attribution/fidelity scoring, failure-modes retro) sits un-numbered
+in the tracker Backlog.
 
 ## Out of Scope for Sprint 1
 
@@ -52,6 +54,46 @@ scoring (S1-013), and the failure-modes retro (S1-014).
 - Contradiction and evolution detection
 - Incremental notebook re-synthesis
 - Human-edit handling
+
+## MVP Quickstart (Sprint 2)
+
+Sprint 2 closes the MVP gap: claims are extracted by a live model through
+OpenRouter's OpenAI-compatible API, and one command runs the whole flow from
+share link to claim ledger.
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e .
+
+export OPENROUTER_API_KEY=sk-or-...        # https://openrouter.ai/keys
+export CHATNOTE_MODEL=anthropic/claude-sonnet-5   # any OpenRouter model slug
+
+chatnote run https://claude.ai/share/<id>
+chatnote query claims --conversation <id>
+```
+
+`chatnote run` chains capture → store ingest → claim extraction and prints the
+transcript ID, claim counts, citation support verdicts, and ready-to-paste
+query commands. If a stage fails it reports what did complete (capture file
+paths, the stored transcript ID) so nothing has to be redone.
+
+The model is plug-and-play by design — swap `CHATNOTE_MODEL` (or pass
+`--model`) to experiment with different models. There is no default model: an
+unset model is a clear configuration error instead of a confusing API failure.
+
+Environment variables:
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | yes (for model extraction) | OpenRouter API key sent as the bearer token. |
+| `CHATNOTE_MODEL` | yes, unless `--model` is passed | Model slug for extraction, e.g. `anthropic/claude-sonnet-5`. |
+| `CHATNOTE_LLM_BASE_URL` | no | OpenAI-compatible base URL; defaults to `https://openrouter.ai/api/v1`. Point it at a local Ollama/vLLM server to run without OpenRouter. |
+
+`--claims-json <file>` remains the offline/testing path on both `chatnote run`
+and `chatnote extract`: it feeds pre-generated extraction output through the
+same pipeline with no network call. The citation support check stays
+deterministic and lexical in the MVP.
 
 ## Local CLI
 
@@ -95,11 +137,12 @@ The Sprint 1 knowledge-base foundation lives beside the capture CLI:
   rows, and citation support checks are append-only, enforced by triggers.
 - `chatnote store ingest <raw> <transcript>` registers one capture output pair
   and stores the parsed transcript records.
-- `chatnote extract <transcript-id> --claims-json <file>` runs one transcript
-  through the claim extraction pipeline. Sprint 1 uses a file-backed extractor
-  (pre-generated output JSON) so the pipeline runs without a live model call;
-  the extractor is a callable boundary that a model-backed implementation can
-  replace. Output is validated against the
+- `chatnote extract <transcript-id>` runs one transcript through the claim
+  extraction pipeline. By default it calls the OpenRouter model from
+  `--model`/`CHATNOTE_MODEL` (see the MVP quickstart); with
+  `--claims-json <file>` it uses the Sprint 1 file-backed extractor
+  (pre-generated output JSON) so the pipeline runs without a live model call.
+  Output is validated against the
   [S1-009 prompt contract](docs/s1-009-claim-extraction-prompt-contract.md),
   each claim gets a citation support verdict (`yes`, `partial`, `no`,
   `unknown`), and unsupported claims are stored as direct quotes instead of
@@ -113,7 +156,7 @@ The Sprint 1 knowledge-base foundation lives beside the capture CLI:
 ```bash
 chatnote store init
 chatnote store ingest data/raw/<file>.json data/transcripts/<file>.json
-chatnote extract <transcript-id> --claims-json claims.json
+chatnote extract <transcript-id>
 chatnote query claims --speaker user --speech-act preference
 ```
 
