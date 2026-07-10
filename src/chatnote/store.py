@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_FILE_NAMES = ("s1-005-schema-v1.sql", "s1-011-citation-support-v1.sql")
+SCHEMA_FILE_NAMES = (
+    "s1-005-schema-v1.sql",
+    "s1-011-citation-support-v1.sql",
+    "s1-012-raw-extraction-output-v1.sql",
+)
 DOCS_DIR = Path(__file__).resolve().parents[2] / "docs"
 DEFAULT_DB_PATH = Path("data") / "chatnote.db"
 
@@ -293,17 +297,21 @@ class LedgerStore:
         run: RunRecord,
         claims: list[dict[str, Any]] | None = None,
         support_checks: list[dict[str, Any]] | None = None,
+        raw_output_path: str | Path | None = None,
     ) -> tuple[str, list[str]]:
-        """Append one extraction run with its claims and support checks atomically.
+        """Append one extraction run, raw JSON output, claims, and checks atomically.
 
         `claims` rows use claim_ledger column names (without claim_id/run_id,
         which are generated here). `support_checks` rows reference claims by
-        `claim_sequence` and use claim_support_checks column names.
+        `claim_sequence` and use claim_support_checks column names. When a
+        parseable model response was written to `raw_output_path`, its immutable
+        JSON document is linked to this run.
         """
         if run.status not in RUN_STATUSES:
             raise StoreError(f"Unsupported run status: {run.status!r}")
         claims = claims or []
         support_checks = support_checks or []
+        output_details = _read_output_details(raw_output_path)
         run_id = _new_id("run")
         claim_ids: dict[int, str] = {
             claim["claim_sequence"]: _new_id("claim") for claim in claims
@@ -334,6 +342,17 @@ class LedgerStore:
                         run.completed_at,
                     ),
                 )
+                if output_details is not None:
+                    file_path, sha256, byte_size = output_details
+                    self._conn.execute(
+                        """
+                        INSERT INTO extraction_outputs (
+                            run_id, file_path, sha256, byte_size
+                        )
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (run_id, file_path, sha256, byte_size),
+                    )
                 for claim in claims:
                     self._conn.execute(
                         """
@@ -408,3 +427,20 @@ def utc_now() -> str:
 
 def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4()}"
+
+
+def _read_output_details(
+    raw_output_path: str | Path | None,
+) -> tuple[str, str, int] | None:
+    if raw_output_path is None:
+        return None
+    path = Path(raw_output_path)
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        raise StoreError(f"Could not read raw extraction output: {exc}") from exc
+    try:
+        json.loads(data)
+    except json.JSONDecodeError as exc:
+        raise StoreError(f"Raw extraction output must be valid JSON: {exc}") from exc
+    return str(path), hashlib.sha256(data).hexdigest(), len(data)

@@ -157,8 +157,10 @@ The Sprint 1 knowledge-base foundation lives beside the capture CLI:
   [S1-009 prompt contract](docs/s1-009-claim-extraction-prompt-contract.md),
   each claim gets a citation support verdict (`yes`, `partial`, `no`,
   `unknown`), and unsupported claims are stored as direct quotes instead of
-  unsupported rewrites. Malformed output records a visible failed run and
-  writes no claims.
+  unsupported rewrites. Every parseable response is also kept as one immutable
+  JSON document per extraction run in `data/extractions/` (or the selected
+  `--output-dir`), including contract-rejected output. Malformed output records
+  a visible failed run and writes no claims.
 - `chatnote query transcripts|claims|runs` inspects stored records. Claims can
   be filtered by `--conversation`, `--speaker`, and `--speech-act`, and every
   result keeps its source pointer back to the raw message. Add `--json` for
