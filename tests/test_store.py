@@ -75,6 +75,7 @@ class StoreTests(unittest.TestCase):
                 "extraction_runs",
                 "claim_ledger",
                 "claim_support_checks",
+                "extraction_outputs",
             }.issubset(tables)
         )
 

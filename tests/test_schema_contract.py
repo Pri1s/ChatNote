@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "docs" / "s1-005-schema-v1.sql"
+EXTRACTION_OUTPUT_SCHEMA_PATH = ROOT / "docs" / "s1-012-raw-extraction-output-v1.sql"
 
 
 class SchemaContractTests(unittest.TestCase):
@@ -14,6 +15,7 @@ class SchemaContractTests(unittest.TestCase):
         self.conn = sqlite3.connect(":memory:")
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.conn.executescript(EXTRACTION_OUTPUT_SCHEMA_PATH.read_text(encoding="utf-8"))
 
     def tearDown(self) -> None:
         self.conn.close()
@@ -29,6 +31,7 @@ class SchemaContractTests(unittest.TestCase):
                 "transcript_warnings",
                 "extraction_runs",
                 "claim_ledger",
+                "extraction_outputs",
             }.issubset(tables)
         )
 
@@ -56,6 +59,13 @@ class SchemaContractTests(unittest.TestCase):
 
     def test_schema_accepts_sample_claim_and_rejects_mutation(self) -> None:
         self._insert_sample_claim()
+        self.conn.execute(
+            """
+            INSERT INTO extraction_outputs (run_id, file_path, sha256, byte_size)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("run-1", "data/extractions/run-1.json", "d" * 64, 42),
+        )
 
         immutable_statements = [
             ("UPDATE raw_artifacts SET media_type = 'text/plain'", "raw_artifacts is immutable"),
@@ -64,6 +74,7 @@ class SchemaContractTests(unittest.TestCase):
             ("DELETE FROM transcripts", "transcripts is immutable"),
             ("UPDATE extraction_runs SET status = 'failed'", "extraction_runs is append-only"),
             ("DELETE FROM extraction_runs", "extraction_runs is append-only"),
+            ("DELETE FROM extraction_outputs", "extraction_outputs is append-only"),
             (
                 "UPDATE claim_ledger SET hedge_level = 'high'",
                 "claim_ledger is append-only",

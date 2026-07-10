@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -40,6 +41,7 @@ class ExtractionOutcome:
     claim_ids: tuple[str, ...]
     support_verdicts: tuple[tuple[str, int], ...]
     fallback_count: int
+    raw_output_path: Path
 
 
 def run_extraction_pipeline(
@@ -50,15 +52,18 @@ def run_extraction_pipeline(
     extractor_name: str,
     model: str | None = None,
     checker: CitationChecker | None = None,
+    output_dir: str | Path = Path("data"),
 ) -> ExtractionOutcome:
     """Run one transcript through extraction, validation, support check, and
-    ledger write.
+    raw-output write, and ledger write.
 
     The extractor receives the rendered S1-009 prompt and returns raw output
     (JSON text or an already-parsed object), so tests and the CLI can supply
     file-backed or mocked extractors instead of a live model call. Malformed
     output records a failed extraction run and raises ExtractionPipelineError
-    instead of silently writing bad ledger rows.
+    instead of silently writing bad ledger rows. Each parseable response is
+    saved as one JSON document under `<output_dir>/extractions/` and linked to
+    its extraction run, including contract-rejected responses.
     """
     transcript_row = queries.get_transcript(store, transcript_id=transcript_id)
     transcript = _reconstruct_transcript(store, transcript_row)
@@ -69,7 +74,9 @@ def run_extraction_pipeline(
     prompt = build_extraction_prompt(transcript)
     started_at = utc_now()
 
-    def record_failure(error_message: str) -> str:
+    def record_failure(
+        error_message: str, *, raw_output_path: Path | None = None
+    ) -> str:
         run_id, _ = store.record_extraction_result(
             run=RunRecord(
                 transcript_id=transcript_id,
@@ -83,7 +90,8 @@ def run_extraction_pipeline(
                 output_claim_count=0,
                 started_at=started_at,
                 completed_at=utc_now(),
-            )
+            ),
+            raw_output_path=raw_output_path,
         )
         return run_id
 
@@ -97,9 +105,28 @@ def run_extraction_pipeline(
 
     try:
         payload = parse_extraction_output(raw_output)
-        claims = validate_extraction_output(payload, transcript)
     except ExtractionValidationError as exc:
         run_id = record_failure(str(exc))
+        raise ExtractionPipelineError(
+            f"Extraction output was rejected (recorded as run {run_id}): {exc}",
+            run_id=run_id,
+        ) from exc
+
+    try:
+        raw_output_path = _write_raw_extraction_output(
+            raw_output, payload=payload, output_dir=output_dir, transcript_id=transcript_id
+        )
+    except OSError as exc:
+        run_id = record_failure(f"Could not store raw extraction JSON: {exc}")
+        raise ExtractionPipelineError(
+            f"Extraction output could not be stored (recorded as run {run_id}): {exc}",
+            run_id=run_id,
+        ) from exc
+
+    try:
+        claims = validate_extraction_output(payload, transcript)
+    except ExtractionValidationError as exc:
+        run_id = record_failure(str(exc), raw_output_path=raw_output_path)
         raise ExtractionPipelineError(
             f"Extraction output was rejected (recorded as run {run_id}): {exc}",
             run_id=run_id,
@@ -144,6 +171,7 @@ def run_extraction_pipeline(
         ),
         claims=ledger_rows,
         support_checks=check_rows,
+        raw_output_path=raw_output_path,
     )
     return ExtractionOutcome(
         run_id=run_id,
@@ -153,6 +181,7 @@ def run_extraction_pipeline(
         claim_ids=tuple(claim_ids),
         support_verdicts=tuple(sorted(verdict_counts.items())),
         fallback_count=fallback_count,
+        raw_output_path=raw_output_path,
     )
 
 
@@ -167,6 +196,28 @@ def make_file_extractor(path: str | Path) -> Extractor:
         return Path(path).read_text(encoding="utf-8")
 
     return extractor
+
+
+def _write_raw_extraction_output(
+    raw_output: str | dict[str, Any],
+    *,
+    payload: dict[str, Any],
+    output_dir: str | Path,
+    transcript_id: str,
+) -> Path:
+    """Write one complete, inspectable JSON response document for a run."""
+    directory = Path(output_dir) / "extractions"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{transcript_id}-{uuid.uuid4()}.json"
+    contents = (
+        raw_output.strip()
+        if isinstance(raw_output, str)
+        else json.dumps(payload, indent=2, ensure_ascii=False)
+    )
+    temporary_path = path.with_suffix(".tmp")
+    temporary_path.write_text(contents + "\n", encoding="utf-8")
+    temporary_path.replace(path)
+    return path
 
 
 def _reconstruct_transcript(

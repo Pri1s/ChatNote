@@ -8,7 +8,7 @@ validation rules, and the mapping into `claim_ledger` from the S1-005 schema.
 
 The contract is implemented in `src/chatnote/extraction_contract.py`:
 
-- `PROMPT_VERSION` — current contract version, `s1-009-v1`, recorded on every
+- `PROMPT_VERSION` — current contract version, `s1-009-v2`, recorded on every
   extraction run.
 - `build_extraction_prompt(transcript)` — deterministic prompt renderer.
 - `parse_extraction_output(raw)` / `validate_extraction_output(payload, transcript)` —
@@ -65,7 +65,7 @@ keeping.
 | --- | --- | --- |
 | `standalone_claim_text` | Yes | Non-empty; self-contained restatement with references resolved; must not add or de-hedge content. |
 | `speaker_role` | Yes | `user`, `assistant`, `system`, or `unknown`; must match the role of the source message (unless that role is `unknown`). |
-| `speech_act_type` | Yes | `fact`, `preference`, `decision`, `instruction`, `question`, `plan`, `todo`, `correction`, `summary`, or `other`. |
+| `speech_act_type` | Yes | Exactly one of `fact`, `preference`, `decision`, `instruction`, `question`, `plan`, `todo`, `correction`, `summary`, or `other`. Stated likes, dislikes, and desired choices are `preference`; labels such as `opinion` and `belief` are forbidden, and uncategorized acts use `other`. |
 | `hedge_level` | Yes | `none`, `low`, `medium`, `high`, or `unknown`; reflects the speaker's own confidence. |
 | `source_message_index` | Yes | Integer index of an existing transcript message. |
 | `source_quote` | Yes | Non-empty verbatim span copied from the source message; the shortest span that supports the claim. |

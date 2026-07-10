@@ -36,7 +36,7 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(prompt_sha256(first), prompt_sha256(second))
         self.assertEqual(len(prompt_sha256(first)), 64)
-        self.assertEqual(PROMPT_VERSION, "s1-009-v1")
+        self.assertEqual(PROMPT_VERSION, "s1-009-v2")
 
     def test_prompt_contains_transcript_and_contract_rules(self) -> None:
         prompt = build_extraction_prompt(TRANSCRIPT)
@@ -48,6 +48,13 @@ class PromptTests(unittest.TestCase):
         self.assertIn('"claims"', prompt)
         self.assertIn("standalone_claim_text", prompt)
         self.assertIn("outside knowledge", prompt)
+        self.assertIn(
+            "speech_act_type MUST be exactly one of: fact, preference, decision, "
+            "instruction, question, plan, todo, correction, summary, other",
+            prompt,
+        )
+        self.assertIn('labels such as "opinion" or "belief"', prompt)
+        self.assertIn("use other when none of the", prompt)
 
 
 class ParseTests(unittest.TestCase):

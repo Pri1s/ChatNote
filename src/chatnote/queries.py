@@ -150,16 +150,21 @@ def list_extraction_runs(
     store: LedgerStore, *, transcript_id: str | None = None
 ) -> list[dict[str, Any]]:
     sql = (
-        "SELECT run_id, transcript_id, extractor_name, prompt_version, "
-        "prompt_sha256, model, status, error_message, input_message_count, "
-        "output_claim_count, started_at, completed_at, created_at "
-        "FROM extraction_runs"
+        "SELECT extraction_runs.run_id, extraction_runs.transcript_id, "
+        "extractor_name, prompt_version, prompt_sha256, model, status, "
+        "error_message, input_message_count, output_claim_count, started_at, "
+        "completed_at, extraction_runs.created_at, "
+        "extraction_outputs.file_path AS raw_output_path, "
+        "extraction_outputs.sha256 AS raw_output_sha256, "
+        "extraction_outputs.byte_size AS raw_output_byte_size "
+        "FROM extraction_runs LEFT JOIN extraction_outputs "
+        "ON extraction_outputs.run_id = extraction_runs.run_id"
     )
     params: list[Any] = []
     if transcript_id is not None:
-        sql += " WHERE transcript_id = ?"
+        sql += " WHERE extraction_runs.transcript_id = ?"
         params.append(transcript_id)
-    sql += " ORDER BY started_at, run_id"
+    sql += " ORDER BY started_at, extraction_runs.run_id"
     return _rows(store, sql, params)
 
 

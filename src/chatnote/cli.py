@@ -79,6 +79,12 @@ def build_parser() -> argparse.ArgumentParser:
         "OpenRouter model from --model or CHATNOTE_MODEL.",
     )
     extract.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("data"),
+        help="Directory for stored raw extraction JSON. Defaults to ./data.",
+    )
+    extract.add_argument(
         "--extractor-name",
         help="Extractor name recorded on the extraction run. Defaults to "
         "file-extractor with --claims-json, openrouter otherwise.",
@@ -242,6 +248,7 @@ def _extract_command(args: argparse.Namespace, *, transport=None) -> int:
                 extractor=extractor,
                 extractor_name=extractor_name,
                 model=model,
+                output_dir=getattr(args, "output_dir", Path("data")),
             )
     except ExtractionPipelineError as exc:
         print(f"chatnote: error: {exc}", file=sys.stderr)
@@ -307,6 +314,7 @@ def _run_command(
                     extractor=extractor,
                     extractor_name=extractor_name,
                     model=model,
+                    output_dir=args.output_dir,
                 )
             except (ExtractionPipelineError, queries.QueryError) as exc:
                 print(f"chatnote: error: extraction failed: {exc}", file=sys.stderr)
@@ -338,6 +346,7 @@ def _print_extraction_outcome(outcome) -> None:
     print(f"Extraction run: {outcome.run_id}")
     print(f"Status: {outcome.status}")
     print(f"Claims written: {len(outcome.claim_ids)}")
+    print(f"Raw LLM JSON: {outcome.raw_output_path}")
     for verdict, count in outcome.support_verdicts:
         print(f"Citation support {verdict}: {count}")
     print(f"Quote fallbacks applied: {outcome.fallback_count}")
@@ -412,6 +421,8 @@ def _print_run(row: dict) -> None:
     )
     if row["error_message"]:
         print(f"  error: {row['error_message']}")
+    if row["raw_output_path"]:
+        print(f"  raw LLM JSON: {row['raw_output_path']}")
 
 
 def _add_db_path_argument(parser: argparse.ArgumentParser) -> None:

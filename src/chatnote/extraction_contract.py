@@ -8,7 +8,7 @@ from typing import Any
 from .store import HEDGE_LEVELS, SPEAKER_ROLES, SPEECH_ACT_TYPES
 
 
-PROMPT_VERSION = "s1-009-v1"
+PROMPT_VERSION = "s1-009-v2"
 
 _REQUIRED_CLAIM_FIELDS = {
     "standalone_claim_text",
@@ -62,6 +62,10 @@ Return ONLY a JSON object with this exact shape and no other top-level keys:
 Rules:
 - speaker_role is who made the claim and must match the role shown for the
   source message.
+- speech_act_type MUST be exactly one of: {', '.join(SPEECH_ACT_TYPES)}. Never
+  invent or substitute labels such as "opinion" or "belief". Classify stated
+  likes, dislikes, or desired choices as preference; use other when none of the
+  allowed categories fits.
 - source_quote must be copied verbatim from the source message text; it is the
   evidence for the claim, so prefer the shortest span that fully supports it.
 - If character offsets are provided they index into the source block text when

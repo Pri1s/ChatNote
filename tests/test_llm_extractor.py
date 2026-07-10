@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -142,6 +143,9 @@ class ExtractorTests(unittest.TestCase):
 
 class PipelineIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.output_dir = Path(self._tmpdir.name) / "data"
         self.store = LedgerStore.open(":memory:")
         self.addCleanup(self.store.close)
         ingest = self.store.ingest_capture(
@@ -162,6 +166,7 @@ class PipelineIntegrationTests(unittest.TestCase):
             extractor=extractor,
             extractor_name="openrouter",
             model=CONFIG.model,
+            output_dir=self.output_dir,
         )
 
         self.assertEqual(outcome.status, "succeeded")
@@ -172,6 +177,7 @@ class PipelineIntegrationTests(unittest.TestCase):
         self.assertEqual(
             len(queries.list_claims(self.store)), 3
         )
+        self.assertTrue(outcome.raw_output_path.is_file())
 
     def test_failing_transport_records_failed_run(self) -> None:
         def transport(request: dict) -> dict:
@@ -185,6 +191,7 @@ class PipelineIntegrationTests(unittest.TestCase):
                 extractor=extractor,
                 extractor_name="openrouter",
                 model=CONFIG.model,
+                output_dir=self.output_dir,
             )
 
         runs = queries.list_extraction_runs(self.store, transcript_id=self.transcript_id)

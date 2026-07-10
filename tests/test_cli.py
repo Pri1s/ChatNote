@@ -107,12 +107,15 @@ class StoreAndExtractCLITests(unittest.TestCase):
             transcript_id,
             "--claims-json",
             str(VALID_OUTPUT_FIXTURE),
+            "--output-dir",
+            str(Path(self._tmpdir.name) / "data"),
             "--db-path",
             self.db_path,
         )
         self.assertEqual(exit_code, 0)
         self.assertIn("Status: succeeded", stdout)
         self.assertIn("Claims written: 3", stdout)
+        self.assertIn("Raw LLM JSON:", stdout)
 
         exit_code, stdout, _ = run_cli(
             "query", "claims", "--db-path", self.db_path, "--json"
@@ -204,6 +207,7 @@ class StoreAndExtractCLITests(unittest.TestCase):
             extractor_name=None,
             model="test/model",
             db_path=Path(self.db_path),
+            output_dir=Path(self._tmpdir.name) / "data",
         )
         stdout = io.StringIO()
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "key"}, clear=True):
@@ -222,6 +226,7 @@ class StoreAndExtractCLITests(unittest.TestCase):
         run = json.loads(runs_json)[0]
         self.assertEqual(run["extractor_name"], "openrouter")
         self.assertEqual(run["model"], "test/model")
+        self.assertTrue(Path(run["raw_output_path"]).is_file())
 
     def test_query_claims_with_no_records(self) -> None:
         exit_code, stdout, _ = run_cli("query", "claims", "--db-path", self.db_path)
@@ -298,6 +303,7 @@ class RunCommandTests(unittest.TestCase):
         self.assertIn("Status: succeeded", stdout)
         self.assertIn("Claims written: 1", stdout)
         self.assertIn("Citation support partial: 1", stdout)
+        self.assertIn("Raw LLM JSON:", stdout)
         self.assertIn("chatnote query claims --conversation fixture-structured", stdout)
 
         exit_code, claims_json, _ = run_cli(
@@ -307,6 +313,11 @@ class RunCommandTests(unittest.TestCase):
         claims = json.loads(claims_json)
         self.assertEqual(len(claims), 1)
         self.assertEqual(claims[0]["conversation_id"], "fixture-structured")
+        exit_code, runs_json, _ = run_cli(
+            "query", "runs", "--db-path", str(self.db_path), "--json"
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(Path(json.loads(runs_json)[0]["raw_output_path"]).is_file())
 
     def test_run_stubbed_transport_covers_llm_path(self) -> None:
         content = json.dumps(self.STRUCTURED_CLAIMS)
